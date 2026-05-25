@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ClipData;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -12,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
 import android.os.Build;
@@ -21,8 +21,7 @@ import android.text.InputType;
 import android.view.DragEvent;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Button;
+import android.view.Window;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -54,18 +53,32 @@ public class MainActivity extends Activity {
     private static final int REQ_CAMERA = 1002;
     private static final int REQ_CAMERA_PERMISSION = 1003;
 
+    private static final String GROUP_ALL = "全部";
+    private static final String GROUP_DEFAULT = "默认";
+
     private final List<PdfItem> pdfItems = new ArrayList<>();
     private final Set<String> groups = new LinkedHashSet<>();
     private LinearLayout root;
     private LinearLayout list;
-    private String currentGroup = "全部";
+    private String currentGroup = GROUP_ALL;
     private Uri cameraUri;
     private File cameraFile;
     private SharedPreferences prefs;
 
+    private final int blue = Color.rgb(11, 99, 206);
+    private final int blue2 = Color.rgb(22, 132, 237);
+    private final int bg = Color.rgb(244, 247, 251);
+    private final int text = Color.rgb(24, 34, 48);
+    private final int muted = Color.rgb(102, 112, 133);
+    private final int line = Color.rgb(216, 226, 239);
+    private final int soft = Color.rgb(238, 246, 255);
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Window window = getWindow();
+        window.setStatusBarColor(blue);
+        window.setNavigationBarColor(Color.WHITE);
         prefs = getSharedPreferences("photo_pdf_data", MODE_PRIVATE);
         loadState();
         buildUi();
@@ -75,99 +88,167 @@ public class MainActivity extends Activity {
     private void buildUi() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(244, 247, 251));
+        root.setBackgroundColor(bg);
         setContentView(root);
+
+        LinearLayout topbar = new LinearLayout(this);
+        topbar.setOrientation(LinearLayout.HORIZONTAL);
+        topbar.setGravity(Gravity.CENTER_VERTICAL);
+        topbar.setPadding(dp(18), 0, dp(18), 0);
+        topbar.setBackgroundColor(blue);
+        root.addView(topbar, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        TextView appIcon = new TextView(this);
+        appIcon.setText("PDF");
+        appIcon.setTextColor(blue);
+        appIcon.setTextSize(11);
+        appIcon.setTypeface(Typeface.DEFAULT_BOLD);
+        appIcon.setGravity(Gravity.CENTER);
+        appIcon.setBackground(round(Color.WHITE, Color.WHITE, dp(9), 0));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(34), dp(34));
+        iconLp.setMargins(0, 0, dp(12), 0);
+        topbar.addView(appIcon, iconLp);
 
         TextView title = new TextView(this);
         title.setText("照片PDF整理");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(22);
+        title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        title.setPadding(dp(18), 0, dp(18), 0);
-        title.setBackgroundColor(Color.rgb(11, 99, 206));
-        root.addView(title, new LinearLayout.LayoutParams(-1, dp(58)));
+        title.setSingleLine(true);
+        topbar.addView(title, new LinearLayout.LayoutParams(0, -1, 1));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setPadding(dp(12), dp(12), dp(12), dp(8));
-        actions.setGravity(Gravity.CENTER);
-        root.addView(actions);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        Button camera = primaryButton("拍照转PDF");
-        camera.setOnClickListener(v -> startCameraFlow());
-        actions.addView(camera, weightParams());
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(14), dp(14), dp(26));
+        scroll.addView(content);
 
-        Button album = primaryButton("相册多选转PDF");
-        album.setOnClickListener(v -> pickImages());
-        actions.addView(album, weightParams());
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        content.addView(row1);
+        row1.addView(actionCard("📷", "拍照转PDF", "调用相机，单张照片生成PDF", true, v -> startCameraFlow()), cardWeight(true));
+        row1.addView(actionCard("🖼", "相册多选转PDF", "多张图片合成一个PDF", true, v -> pickImages()), cardWeight(false));
 
-        Button group = primaryButton("新建分组");
-        group.setOnClickListener(v -> promptNewGroup());
-        actions.addView(group, weightParams());
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams row2Lp = new LinearLayout.LayoutParams(-1, -2);
+        row2Lp.setMargins(0, dp(10), 0, 0);
+        content.addView(row2, row2Lp);
+        row2.addView(actionCard("+", "新建分组", "合同、发票、资料等", false, v -> promptNewGroup()), cardWeight(true));
+        row2.addView(actionCard("↕", "排序模式", "长按条目拖动排序", false, v -> toast("长按PDF条目后拖动排序")), cardWeight(false));
 
         TextView hint = new TextView(this);
         hint.setText("长按PDF条目后拖动可排序；每个条目可打开、分享、改名、分组或删除。");
-        hint.setTextSize(13);
-        hint.setTextColor(Color.rgb(90, 96, 105));
-        hint.setPadding(dp(16), 0, dp(16), dp(8));
-        root.addView(hint);
+        hint.setTextSize(12);
+        hint.setTextColor(muted);
+        hint.setLineSpacing(dp(2), 1.0f);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(-1, -2);
+        hintLp.setMargins(0, dp(12), 0, dp(8));
+        content.addView(hint, hintLp);
 
         HorizontalScrollView tabsWrap = new HorizontalScrollView(this);
         tabsWrap.setHorizontalScrollBarEnabled(false);
         LinearLayout tabs = new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
-        tabs.setPadding(dp(12), 0, dp(12), dp(8));
         tabs.setTag("tabs");
         tabsWrap.addView(tabs);
-        root.addView(tabsWrap);
+        content.addView(tabsWrap);
 
-        ScrollView scroll = new ScrollView(this);
+        LinearLayout section = new LinearLayout(this);
+        section.setGravity(Gravity.CENTER_VERTICAL);
+        section.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(-1, dp(34));
+        sectionLp.setMargins(0, dp(4), 0, dp(6));
+        content.addView(section, sectionLp);
+
+        TextView sectionTitle = new TextView(this);
+        sectionTitle.setText("历史PDF");
+        sectionTitle.setTextColor(text);
+        sectionTitle.setTextSize(16);
+        sectionTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        section.addView(sectionTitle, new LinearLayout.LayoutParams(0, -1, 1));
+
+        TextView sortNote = new TextView(this);
+        sortNote.setText("当前：自定义排序");
+        sortNote.setTextSize(12);
+        sortNote.setTextColor(muted);
+        sortNote.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        section.addView(sortNote, new LinearLayout.LayoutParams(-2, -1));
+
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(dp(12), 0, dp(12), dp(24));
-        scroll.addView(list);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(list);
     }
 
-    private Button primaryButton(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(14);
-        b.setBackgroundColor(Color.rgb(11, 99, 206));
-        return b;
+    private LinearLayout actionCard(String icon, String title, String copy, boolean primary, View.OnClickListener listener) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setClickable(true);
+        card.setOnClickListener(listener);
+        card.setBackground(primary ? gradient(blue, blue2, dp(14)) : round(Color.WHITE, line, dp(14), 1));
+
+        TextView iconView = new TextView(this);
+        iconView.setText(icon);
+        iconView.setTextSize(primary ? 22 : 24);
+        iconView.setTextColor(primary ? Color.WHITE : blue);
+        iconView.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(iconView);
+
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextSize(15);
+        titleView.setTextColor(primary ? Color.WHITE : blue);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setSingleLine(true);
+        card.addView(titleView);
+
+        TextView copyView = new TextView(this);
+        copyView.setText(copy);
+        copyView.setTextSize(11);
+        copyView.setTextColor(primary ? Color.argb(220, 255, 255, 255) : muted);
+        copyView.setMaxLines(2);
+        card.addView(copyView);
+        return card;
     }
 
-    private LinearLayout.LayoutParams weightParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1);
-        lp.setMargins(dp(4), 0, dp(4), 0);
+    private LinearLayout.LayoutParams cardWeight(boolean left) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(76), 1);
+        lp.setMargins(left ? 0 : dp(5), 0, left ? dp(5) : 0, 0);
         return lp;
     }
 
     private void refreshTabs() {
-        HorizontalScrollView wrap = (HorizontalScrollView) root.getChildAt(3);
+        HorizontalScrollView wrap = (HorizontalScrollView) ((LinearLayout) ((ScrollView) root.getChildAt(1)).getChildAt(0)).getChildAt(3);
         LinearLayout tabs = (LinearLayout) wrap.getChildAt(0);
         tabs.removeAllViews();
-        addTab(tabs, "全部");
+        addTab(tabs, GROUP_ALL);
         for (String group : groups) addTab(tabs, group);
     }
 
     private void addTab(LinearLayout tabs, String name) {
-        Button b = new Button(this);
-        b.setText(name);
-        b.setAllCaps(false);
-        b.setTextSize(13);
-        b.setTextColor(name.equals(currentGroup) ? Color.WHITE : Color.rgb(11, 99, 206));
-        b.setBackgroundColor(name.equals(currentGroup) ? Color.rgb(11, 99, 206) : Color.WHITE);
-        b.setOnClickListener(v -> {
+        TextView tab = new TextView(this);
+        tab.setText(name);
+        tab.setGravity(Gravity.CENTER);
+        tab.setTextSize(13);
+        tab.setTypeface(Typeface.DEFAULT_BOLD);
+        tab.setSingleLine(true);
+        boolean active = name.equals(currentGroup);
+        tab.setTextColor(active ? Color.WHITE : blue);
+        tab.setBackground(round(active ? blue : Color.WHITE, active ? blue : line, dp(999), 1));
+        tab.setPadding(dp(13), 0, dp(13), 0);
+        tab.setClickable(true);
+        tab.setOnClickListener(v -> {
             currentGroup = name;
             refreshList();
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(38));
-        lp.setMargins(0, 0, dp(8), 0);
-        tabs.addView(b, lp);
+        lp.setMargins(0, 0, dp(8), dp(8));
+        tabs.addView(tab, lp);
     }
 
     private void refreshList() {
@@ -176,11 +257,15 @@ public class MainActivity extends Activity {
         List<PdfItem> visible = visibleItems();
         if (visible.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText("暂无PDF。可以拍照生成，或一次导入多张照片生成一个PDF。");
+            empty.setText("当前分组暂无PDF\n可以拍照或从相册多选照片生成。");
             empty.setGravity(Gravity.CENTER);
-            empty.setTextSize(16);
-            empty.setTextColor(Color.rgb(90, 96, 105));
-            list.addView(empty, new LinearLayout.LayoutParams(-1, dp(180)));
+            empty.setTextSize(15);
+            empty.setLineSpacing(dp(4), 1.0f);
+            empty.setTextColor(muted);
+            empty.setBackground(round(Color.WHITE, Color.rgb(188, 210, 239), dp(18), 1));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(150));
+            lp.setMargins(0, dp(20), 0, 0);
+            list.addView(empty, lp);
             return;
         }
         for (PdfItem item : visible) addRow(item);
@@ -189,7 +274,7 @@ public class MainActivity extends Activity {
     private List<PdfItem> visibleItems() {
         List<PdfItem> result = new ArrayList<>();
         for (PdfItem item : pdfItems) {
-            if ("全部".equals(currentGroup) || currentGroup.equals(item.group)) result.add(item);
+            if (GROUP_ALL.equals(currentGroup) || currentGroup.equals(item.group)) result.add(item);
         }
         return result;
     }
@@ -197,8 +282,8 @@ public class MainActivity extends Activity {
     private void addRow(PdfItem item) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(dp(14), dp(10), dp(14), dp(10));
-        row.setBackgroundColor(Color.WHITE);
+        row.setPadding(dp(13), dp(13), dp(13), dp(13));
+        row.setBackground(round(Color.WHITE, line, dp(14), 1));
         row.setTag(item.id);
         LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
         rowLp.setMargins(0, 0, 0, dp(10));
@@ -221,41 +306,74 @@ public class MainActivity extends Activity {
             return true;
         });
 
+        LinearLayout main = new LinearLayout(this);
+        main.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(main);
+
+        TextView thumb = new TextView(this);
+        thumb.setText("PDF");
+        thumb.setTextColor(blue);
+        thumb.setTextSize(12);
+        thumb.setTypeface(Typeface.DEFAULT_BOLD);
+        thumb.setGravity(Gravity.CENTER);
+        thumb.setBackground(round(Color.rgb(248, 252, 255), Color.rgb(199, 221, 248), dp(9), 1));
+        LinearLayout.LayoutParams thumbLp = new LinearLayout.LayoutParams(dp(46), dp(58));
+        thumbLp.setMargins(0, 0, dp(12), 0);
+        main.addView(thumb, thumbLp);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        main.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+
         TextView name = new TextView(this);
         name.setText(item.name);
-        name.setTextSize(17);
+        name.setTextSize(16);
         name.setTypeface(Typeface.DEFAULT_BOLD);
-        name.setTextColor(Color.rgb(24, 34, 48));
-        row.addView(name);
+        name.setTextColor(text);
+        name.setSingleLine(true);
+        info.addView(name);
 
         TextView meta = new TextView(this);
-        meta.setText("分组：" + item.group + "    " + item.createdAt + "    " + fileSize(item.path));
+        meta.setText("分组：" + item.group + "    " + item.createdAt + "\n" + fileSize(item.path));
         meta.setTextSize(12);
-        meta.setTextColor(Color.rgb(100, 108, 118));
-        meta.setPadding(0, dp(4), 0, dp(8));
-        row.addView(meta);
+        meta.setTextColor(muted);
+        meta.setPadding(0, dp(5), 0, 0);
+        meta.setLineSpacing(dp(2), 1.0f);
+        info.addView(meta);
 
         LinearLayout ops = new LinearLayout(this);
         ops.setOrientation(LinearLayout.HORIZONTAL);
-        row.addView(ops);
+        LinearLayout.LayoutParams opsLp = new LinearLayout.LayoutParams(-1, -2);
+        opsLp.setMargins(0, dp(12), 0, 0);
+        row.addView(ops, opsLp);
         addSmallButton(ops, "打开", v -> openPdf(item));
         addSmallButton(ops, "分享", v -> sharePdf(item));
         addSmallButton(ops, "改名", v -> renamePdf(item));
         addSmallButton(ops, "分组", v -> chooseGroup(item));
-        addSmallButton(ops, "上移", v -> move(item, -1));
-        addSmallButton(ops, "下移", v -> move(item, 1));
-        addSmallButton(ops, "删除", v -> deletePdf(item));
+
+        LinearLayout ops2 = new LinearLayout(this);
+        ops2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams ops2Lp = new LinearLayout.LayoutParams(-1, -2);
+        ops2Lp.setMargins(0, dp(6), 0, 0);
+        row.addView(ops2, ops2Lp);
+        addSmallButton(ops2, "上移", v -> move(item, -1));
+        addSmallButton(ops2, "下移", v -> move(item, 1));
+        addSmallButton(ops2, "删除", v -> deletePdf(item));
+        addSmallButton(ops2, "排序", v -> toast("长按卡片拖动排序"));
     }
 
-    private void addSmallButton(LinearLayout ops, String text, View.OnClickListener listener) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setAllCaps(false);
-        b.setTextSize(12);
-        b.setOnClickListener(listener);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1);
-        lp.setMargins(dp(2), 0, dp(2), 0);
-        ops.addView(b, lp);
+    private void addSmallButton(LinearLayout ops, String label, View.OnClickListener listener) {
+        TextView btn = new TextView(this);
+        btn.setText(label);
+        btn.setGravity(Gravity.CENTER);
+        btn.setTextSize(12);
+        btn.setTextColor("删除".equals(label) ? Color.rgb(223, 43, 43) : Color.rgb(52, 64, 84));
+        btn.setBackground(round(Color.rgb(251, 253, 255), line, dp(10), 1));
+        btn.setClickable(true);
+        btn.setOnClickListener(listener);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(34), 1);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        ops.addView(btn, lp);
     }
 
     private void startCameraFlow() {
@@ -336,7 +454,6 @@ public class MainActivity extends Activity {
             File dir = new File(getFilesDir(), "pdfs");
             if (!dir.exists()) dir.mkdirs();
             File out = uniqueFile(dir, sanitize(name), ".pdf");
-
             PdfDocument doc = new PdfDocument();
             int pageWidth = 595;
             int pageHeight = 842;
@@ -368,7 +485,7 @@ public class MainActivity extends Activity {
             item.id = String.valueOf(System.currentTimeMillis());
             item.name = stripPdf(out.getName());
             item.path = out.getAbsolutePath();
-            item.group = currentGroup.equals("全部") ? "默认" : currentGroup;
+            item.group = currentGroup.equals(GROUP_ALL) ? GROUP_DEFAULT : currentGroup;
             item.createdAt = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(new Date());
             groups.add(item.group);
             pdfItems.add(0, item);
@@ -465,13 +582,11 @@ public class MainActivity extends Activity {
                     if (oldFile.renameTo(nextFile)) {
                         item.name = stripPdf(nextFile.getName());
                         item.path = nextFile.getAbsolutePath();
-                        saveState();
-                        refreshList();
                     } else {
                         item.name = next;
-                        saveState();
-                        refreshList();
                     }
+                    saveState();
+                    refreshList();
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -541,7 +656,7 @@ public class MainActivity extends Activity {
 
     private void loadState() {
         groups.clear();
-        groups.add("默认");
+        groups.add(GROUP_DEFAULT);
         pdfItems.clear();
         try {
             JSONArray groupArr = new JSONArray(prefs.getString("groups", "[]"));
@@ -553,7 +668,7 @@ public class MainActivity extends Activity {
                 item.id = obj.optString("id");
                 item.name = obj.optString("name");
                 item.path = obj.optString("path");
-                item.group = obj.optString("group", "默认");
+                item.group = obj.optString("group", GROUP_DEFAULT);
                 item.createdAt = obj.optString("createdAt");
                 if (new File(item.path).exists()) {
                     pdfItems.add(item);
@@ -583,6 +698,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    private GradientDrawable round(int fill, int stroke, int radius, int strokeWidth) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fill);
+        drawable.setCornerRadius(radius);
+        if (strokeWidth > 0) drawable.setStroke(dp(strokeWidth), stroke);
+        return drawable;
+    }
+
+    private GradientDrawable gradient(int start, int end, int radius) {
+        GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{start, end});
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
     private File uniqueFile(File dir, String base, String ext) {
         File file = new File(dir, base + ext);
         int i = 2;
@@ -590,8 +719,8 @@ public class MainActivity extends Activity {
         return file;
     }
 
-    private String sanitize(String text) {
-        return text.replaceAll("[\\\\/:*?\"<>|]", "_");
+    private String sanitize(String value) {
+        return value.replaceAll("[\\\\/:*?\"<>|]", "_");
     }
 
     private String stripPdf(String name) {
@@ -604,12 +733,12 @@ public class MainActivity extends Activity {
         return String.format(Locale.CHINA, "%.0f KB", len / 1024f);
     }
 
-    private void toast(String text) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
+    private void toast(String value) {
+        Toast.makeText(this, value, Toast.LENGTH_SHORT).show();
     }
 
-    private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     static class PdfItem {
