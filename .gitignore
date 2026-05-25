@@ -4,3 +4,7 @@ app/build/
 local.properties
 *.iml
 .idea/
+build-log.zip
+build-log/
+run*_logs/
+run*_logs.zip

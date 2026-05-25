@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>照片PDF整理 - App预览</title>
+  <style>
+    :root {
+      --blue: #0b63ce;
+      --blue-2: #1684ed;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8e2ef;
+      --soft: #eef6ff;
+      --danger: #df2b2b;
+      --green: #10a767;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #e8eef7;
+      color: var(--text);
+      font-family: "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .phone {
+      width: 390px;
+      height: 820px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid #cbd5e1;
+      border-radius: 28px;
+      box-shadow: 0 22px 70px rgba(15, 23, 42, 0.22);
+      position: relative;
+    }
+
+    .status {
+      height: 28px;
+      background: var(--blue);
+      color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      font-size: 12px;
+    }
+
+    .topbar {
+      height: 58px;
+      background: var(--blue);
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      gap: 12px;
+    }
+
+    .app-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: white;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .title {
+      font-weight: 800;
+      font-size: 21px;
+    }
+
+    .content {
+      height: calc(100% - 86px);
+      overflow: auto;
+      padding: 14px 14px 26px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .action {
+      border: 0;
+      min-height: 76px;
+      padding: 12px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-2));
+      color: white;
+      text-align: left;
+      box-shadow: 0 10px 24px rgba(11, 99, 206, 0.22);
+      cursor: pointer;
+    }
+
+    .action.secondary {
+      background: white;
+      color: var(--blue);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .action-icon {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+
+    .action-title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .action-copy {
+      margin-top: 4px;
+      font-size: 11px;
+      opacity: 0.86;
+    }
+
+    .hint {
+      margin: 12px 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0 12px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      color: var(--blue);
+      background: white;
+      padding: 8px 13px;
+      border-radius: 999px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      color: white;
+      background: var(--blue);
+      border-color: var(--blue);
+    }
+
+    .section-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 2px 0 10px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .sort-note {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pdf-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pdf-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+
+    .pdf-main {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .pdf-thumb {
+      width: 46px;
+      height: 58px;
+      border-radius: 9px;
+      background: linear-gradient(180deg, #ffffff, #e9f3ff);
+      border: 1px solid #c7ddf8;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-weight: 900;
+      box-shadow: inset 0 -10px 18px rgba(11, 99, 206, 0.08);
+      flex: 0 0 auto;
+    }
+
+    .pdf-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .pdf-name {
+      font-size: 16px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pdf-meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tag {
+      display: inline-block;
+      color: var(--blue);
+      background: var(--soft);
+      border: 1px solid #c9e2ff;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 5px;
+    }
+
+    .ops {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .op {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      height: 34px;
+      background: #fbfdff;
+      color: #344054;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .op.danger {
+      color: var(--danger);
+    }
+
+    .empty {
+      margin-top: 32px;
+      text-align: center;
+      padding: 36px 22px;
+      background: white;
+      border: 1px dashed #bcd2ef;
+      border-radius: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .modal-backdrop {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.38);
+      align-items: flex-end;
+      padding: 14px;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal {
+      width: 100%;
+      background: white;
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 -12px 38px rgba(15, 23, 42, 0.22);
+    }
+
+    .modal h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .input {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 0 12px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .modal-btn {
+      border: 0;
+      height: 42px;
+      border-radius: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .modal-btn.cancel {
+      background: #eef2f7;
+      color: #344054;
+    }
+
+    .modal-btn.ok {
+      background: var(--blue);
+      color: white;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.9);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    @media (max-width: 520px) {
+      .page {
+        padding: 0;
+      }
+
+      .phone {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="phone">
+      <div class="status">
+        <span>14:46</span>
+        <span>单机模式 · 100%</span>
+      </div>
+      <header class="topbar">
+        <div class="app-icon">PDF</div>
+        <div>
+          <div class="title">照片PDF整理</div>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="actions">
+          <button class="action" data-modal="camera">
+            <span class="action-icon">📷</span>
+            <span class="action-title">拍照转PDF</span>
+            <span class="action-copy">调用相机，单张照片生成PDF</span>
+          </button>
+          <button class="action" data-modal="album">
+            <span class="action-icon">🖼</span>
+            <span class="action-title">相册多选转PDF</span>
+            <span class="action-copy">多张图片合成一个PDF</span>
+          </button>
+          <button class="action secondary" data-modal="group">
+            <span class="action-icon">＋</span>
+            <span class="action-title">新建分组</span>
+            <span class="action-copy">合同、发票、资料等</span>
+          </button>
+          <button class="action secondary" data-toast="已进入拖动排序预览">
+            <span class="action-icon">↕</span>
+            <span class="action-title">排序模式</span>
+            <span class="action-copy">长按条目拖动排序</span>
+          </button>
+        </div>
+
+        <p class="hint">预览版展示 UI 与交互逻辑。真实 App 中会调用系统相机、相册和 PDF 阅读器。</p>
+
+        <nav class="tabs" id="tabs"></nav>
+
+        <div class="section-row">
+          <div class="section-title">历史PDF</div>
+          <div class="sort-note">当前：自定义排序</div>
+        </div>
+
+        <section class="pdf-list" id="pdfList"></section>
+      </div>
+
+      <div class="modal-backdrop" id="modal">
+        <div class="modal">
+          <h2 id="modalTitle">生成PDF</h2>
+          <input class="input" id="modalInput" />
+          <div class="modal-actions">
+            <button class="modal-btn cancel" id="cancelBtn">取消</button>
+            <button class="modal-btn ok" id="okBtn">确认</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast" id="toast">已保存</div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      activeGroup: "全部",
+      groups: ["全部", "默认", "合同", "发票", "学习资料"],
+      pdfs: [
+        { name: "项目合同扫描件", group: "合同", pages: 8, size: "2.4 MB", time: "2026-05-25 14:31" },
+        { name: "餐饮门店票据汇总", group: "发票", pages: 12, size: "3.1 MB", time: "2026-05-25 13:08" },
+        { name: "课堂笔记_图像转PDF", group: "学习资料", pages: 5, size: "1.8 MB", time: "2026-05-24 21:52" }
+      ]
+    };
+
+    const tabs = document.querySelector("#tabs");
+    const list = document.querySelector("#pdfList");
+    const modal = document.querySelector("#modal");
+    const modalTitle = document.querySelector("#modalTitle");
+    const modalInput = document.querySelector("#modalInput");
+    const okBtn = document.querySelector("#okBtn");
+    const cancelBtn = document.querySelector("#cancelBtn");
+    const toast = document.querySelector("#toast");
+    let modalMode = "album";
+
+    function renderTabs() {
+      tabs.innerHTML = "";
+      state.groups.forEach(group => {
+        const btn = document.createElement("button");
+        btn.className = `tab ${group === state.activeGroup ? "active" : ""}`;
+        btn.textContent = group;
+        btn.onclick = () => {
+          state.activeGroup = group;
+          render();
+        };
+        tabs.appendChild(btn);
+      });
+    }
+
+    function visiblePdfs() {
+      if (state.activeGroup === "全部") return state.pdfs;
+      return state.pdfs.filter(item => item.group === state.activeGroup);
+    }
+
+    function renderList() {
+      const items = visiblePdfs();
+      list.innerHTML = "";
+      if (!items.length) {
+        list.innerHTML = `<div class="empty">当前分组暂无PDF<br>可以拍照或从相册多选照片生成。</div>`;
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const card = document.createElement("article");
+        card.className = "pdf-card";
+        card.draggable = true;
+        card.innerHTML = `
+          <div class="pdf-main">
+            <div class="pdf-thumb">PDF</div>
+            <div class="pdf-info">
+              <div class="pdf-name">${item.name}</div>
+              <div class="pdf-meta">
+                <span class="tag">${item.group}</span>${item.pages} 页 · ${item.size}<br>${item.time}
+              </div>
+            </div>
+          </div>
+          <div class="ops">
+            <button class="op">打开</button>
+            <button class="op">分享</button>
+            <button class="op">改名</button>
+            <button class="op">分组</button>
+          </div>
+        `;
+        card.querySelectorAll(".op").forEach(btn => {
+          btn.onclick = () => showToast(`${btn.textContent}：${item.name}`);
+        });
+        card.addEventListener("dragstart", e => {
+          e.dataTransfer.setData("text/plain", String(index));
+        });
+        card.addEventListener("dragover", e => e.preventDefault());
+        card.addEventListener("drop", e => {
+          const from = Number(e.dataTransfer.getData("text/plain"));
+          const globalItems = visiblePdfs();
+          const moved = globalItems[from];
+          const toItem = item;
+          const fromGlobal = state.pdfs.indexOf(moved);
+          const toGlobal = state.pdfs.indexOf(toItem);
+          state.pdfs.splice(fromGlobal, 1);
+          state.pdfs.splice(toGlobal, 0, moved);
+          render();
+          showToast("排序已更新");
+        });
+        list.appendChild(card);
+      });
+    }
+
+    function render() {
+      renderTabs();
+      renderList();
+    }
+
+    function openModal(mode) {
+      modalMode = mode;
+      if (mode === "group") {
+        modalTitle.textContent = "新建分组";
+        modalInput.value = "新分组";
+      } else {
+        modalTitle.textContent = mode === "camera" ? "拍照生成PDF" : "相册多选生成PDF";
+        modalInput.value = `照片PDF_${new Date().toISOString().slice(0, 16).replace(/[-T:]/g, "")}`;
+      }
+      modal.classList.add("show");
+      modalInput.focus();
+      modalInput.select();
+    }
+
+    function closeModal() {
+      modal.classList.remove("show");
+    }
+
+    function confirmModal() {
+      const value = modalInput.value.trim();
+      if (!value) return;
+
+      if (modalMode === "group") {
+        if (!state.groups.includes(value)) state.groups.push(value);
+        state.activeGroup = value;
+        showToast(`已新建分组：${value}`);
+      } else {
+        const group = state.activeGroup === "全部" ? "默认" : state.activeGroup;
+        state.pdfs.unshift({
+          name: value,
+          group,
+          pages: modalMode === "camera" ? 1 : 6,
+          size: modalMode === "camera" ? "680 KB" : "2.2 MB",
+          time: "刚刚"
+        });
+        if (!state.groups.includes(group)) state.groups.push(group);
+        showToast("预览：PDF已生成");
+      }
+      closeModal();
+      render();
+    }
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 1500);
+    }
+
+    document.querySelectorAll("[data-modal]").forEach(btn => {
+      btn.onclick = () => openModal(btn.dataset.modal);
+    });
+
+    document.querySelectorAll("[data-toast]").forEach(btn => {
+      btn.onclick = () => showToast(btn.dataset.toast);
+    });
+
+    cancelBtn.onclick = closeModal;
+    okBtn.onclick = confirmModal;
+    modal.onclick = e => {
+      if (e.target === modal) closeModal();
+    };
+
+    render();
+  </script>
+</body>
+</html>
